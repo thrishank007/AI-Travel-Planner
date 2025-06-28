@@ -24,8 +24,8 @@ An intelligent travel planning application that uses HuggingFace's Llama 4 model
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd gt_hk
+   git clone https://github.com/thrishank007/AI-Travel-Planner
+   cd AI-Travel-Planner
    ```
 
 2. **Install dependencies**:
