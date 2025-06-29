@@ -263,7 +263,23 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.header("📍 Trip Details")
-    destination = st.text_input("Destination", placeholder="e.g., Tokyo, Japan")
+    destination = st.text_input(
+        "Destination(s)", 
+        placeholder="e.g., Tokyo, Japan OR Tokyo, Kyoto, Osaka (separate multiple destinations with commas)",
+        help="Enter one destination or multiple destinations separated by commas for a multi-city trip"
+    )
+    
+    # Parse and display destinations
+    destinations = []
+    if destination:
+        destinations = [dest.strip() for dest in destination.split(',') if dest.strip()]
+        if len(destinations) > 1:
+            st.info(f"🌍 Multi-destination trip detected: {len(destinations)} destinations")
+            for i, dest in enumerate(destinations, 1):
+                st.caption(f"  {i}. {dest}")
+        elif len(destinations) == 1:
+            st.info(f"📍 Single destination: {destinations[0]}")
+    
     col_date1, col_date2 = st.columns(2)
     with col_date1:
         start_date = st.date_input("Start Date", value=datetime.now() + timedelta(days=30), min_value=datetime.now().date())
@@ -275,7 +291,14 @@ with col1:
     if start_date and end_date and end_date >= start_date:
         num_days = (end_date - start_date).days
         if num_days > 0:
-            st.info(f"Trip duration: {num_days} days")
+            if len(destinations) > 1:
+                days_per_destination = num_days // len(destinations)
+                remaining_days = num_days % len(destinations)
+                st.info(f"Trip duration: {num_days} days total")
+                st.caption(f"📊 Approximate time per destination: {days_per_destination} days each" + 
+                          (f" (+ {remaining_days} extra days to distribute)" if remaining_days > 0 else ""))
+            else:
+                st.info(f"Trip duration: {num_days} days")
         else:
             st.warning("Please select valid travel dates")
     
@@ -300,8 +323,160 @@ if 'research_results' not in st.session_state:
 if 'itinerary' not in st.session_state:
     st.session_state.itinerary = None
 
-# Check if all required inputs are provided
-if destination and num_days > 0:
+# Enhanced function to create multi-destination prompts
+def create_multi_destination_research_prompt(destinations, num_days, travel_style, travelers, budget_range, interests, accommodation_type, mobility, special_requirements):
+    """Create comprehensive research prompt for single or multiple destinations"""
+    
+    if len(destinations) == 1:
+        # Single destination prompt
+        return f"""
+        Research {destinations[0]} for a {num_days}-day {travel_style.lower()} trip for {travelers} travelers.
+        Budget: {budget_range}
+        Interests: {', '.join(interests)}
+        Accommodation preferences: {', '.join(accommodation_type)}
+        Transportation: {mobility}
+        Special requirements: {special_requirements or 'None'}
+        
+        Provide comprehensive information about:
+        1. Top attractions and activities with current status and pricing
+        2. Recommended accommodations with availability and rates
+        3. Local dining options with recent reviews
+        4. Transportation methods and current schedules/costs
+        5. Cultural tips and local customs
+        6. Weather considerations for travel dates
+        7. Current budget estimates and cost breakdowns
+        8. Best neighborhoods to stay in
+        9. Day trip opportunities from the city
+        10. Shopping and entertainment options
+        """
+    else:
+        # Multi-destination prompt
+        destinations_list = ', '.join(destinations)
+        days_per_destination = num_days // len(destinations)
+        
+        return f"""
+        Research a {num_days}-day multi-destination {travel_style.lower()} trip covering: {destinations_list}
+        For {travelers} travelers with {budget_range} budget.
+        Interests: {', '.join(interests)}
+        Accommodation preferences: {', '.join(accommodation_type)}
+        Transportation: {mobility}
+        Special requirements: {special_requirements or 'None'}
+        
+        MULTI-DESTINATION RESEARCH REQUIREMENTS:
+        
+        FOR EACH DESTINATION ({destinations_list}):
+        1. **Key Attractions & Activities** (prioritize based on {', '.join(interests)})
+        2. **Recommended Stay Duration** (suggest optimal days out of {days_per_destination} average per destination)
+        3. **Best Accommodations** ({', '.join(accommodation_type)}) with location recommendations
+        4. **Must-try Local Dining** and signature dishes
+        5. **Transportation within the city** ({mobility} preferences)
+        
+        INTER-CITY LOGISTICS:
+        1. **Transportation between destinations** (flights, trains, buses, cars)
+        2. **Travel time and costs** between each destination
+        3. **Optimal route planning** (most efficient order to visit)
+        4. **Luggage considerations** for multi-city travel
+        
+        BUDGET BREAKDOWN:
+        1. **Per-destination costs** (accommodation, food, activities)
+        2. **Transportation costs** between cities
+        3. **Total estimated budget** for the entire trip
+        
+        PRACTICAL MULTI-CITY TIPS:
+        1. **Packing strategies** for multiple destinations
+        2. **Weather variations** across different cities/regions
+        3. **Cultural differences** and customs for each destination
+        4. **Best booking strategies** for multi-city accommodations
+        5. **Time zone considerations** if applicable
+        
+        Please structure the response clearly for each destination and provide a comparative analysis.
+        """
+
+def create_multi_destination_itinerary_prompt(destinations, num_days, start_date, end_date, travelers, travel_style, budget_range, interests, accommodation_type, mobility, special_requirements, research_results=None):
+    """Create comprehensive itinerary prompt for single or multiple destinations"""
+    
+    if len(destinations) == 1:
+        # Single destination itinerary
+        context = f"""
+        Create a detailed {num_days}-day itinerary for {destinations[0]}:
+        Duration: {num_days} days (from {start_date} to {end_date})
+        Travelers: {travelers} people
+        Travel Style: {travel_style}
+        Budget: {budget_range}
+        Interests: {', '.join(interests)}
+        Accommodations: {', '.join(accommodation_type)}
+        Transportation: {mobility}
+        Special Requirements: {special_requirements or 'None'}
+        """
+    else:
+        # Multi-destination itinerary
+        destinations_list = ', '.join(destinations)
+        days_per_destination = num_days // len(destinations)
+        
+        context = f"""
+        Create a detailed {num_days}-day MULTI-DESTINATION itinerary covering: {destinations_list}
+        Duration: {num_days} days total (from {start_date} to {end_date})
+        Travelers: {travelers} people
+        Travel Style: {travel_style}
+        Budget: {budget_range}
+        Interests: {', '.join(interests)}
+        Accommodations: {', '.join(accommodation_type)}
+        Transportation: {mobility}
+        Special Requirements: {special_requirements or 'None'}
+        
+        MULTI-DESTINATION ITINERARY REQUIREMENTS:
+        
+        1. **OPTIMAL ROUTE PLANNING**:
+           - Determine the best order to visit destinations
+           - Consider geographical proximity and transportation efficiency
+           - Factor in arrival/departure logistics
+        
+        2. **TIME ALLOCATION**:
+           - Distribute {num_days} days across {len(destinations)} destinations
+           - Suggest ideal duration for each destination based on attractions
+           - Account for travel days between destinations
+        
+        3. **DAY-BY-DAY BREAKDOWN**:
+           For each day, specify:
+           - **Location**: Which destination you're in
+           - **Morning**: Specific activities with timing
+           - **Afternoon**: Attractions/experiences with travel time
+           - **Evening**: Dining and entertainment recommendations
+           - **Travel days**: Detailed transportation between cities
+        
+        4. **TRANSITION PLANNING**:
+           - **Check-out/Check-in logistics**
+           - **Transportation booking details** (flights, trains, etc.)
+           - **Luggage handling** during city transitions
+           - **Buffer time** for unexpected delays
+        
+        5. **DESTINATION-SPECIFIC HIGHLIGHTS**:
+           For each destination, prioritize:
+           - Must-see attractions based on {', '.join(interests)}
+           - Local experiences unique to that location
+           - Best dining spots for authentic cuisine
+           - Cultural activities and local customs
+        
+        6. **PRACTICAL CONSIDERATIONS**:
+           - **Weather-appropriate activities** for travel dates
+           - **Booking priorities** (what to reserve in advance)
+           - **Emergency contacts** for each destination
+           - **Communication tips** (language, currency, customs)
+        
+        Please structure as:
+        - **Overview & Route Summary**
+        - **Day 1-X: [Destination 1]**
+        - **Day X: Travel Day (Destination 1 → Destination 2)**
+        - **Day X-Y: [Destination 2]**
+        - **Continue for all destinations...**
+        - **Final Tips & Recommendations**
+        """
+    
+    if research_results:
+        context += f"\n\nRESEARCH INFORMATION TO INCORPORATE:\n{research_results}"
+    
+    return context
+if destination and num_days > 0 and destinations:
     # Choose agent type based on API availability
     use_offline = not st.session_state.hf_api_key
     
@@ -311,155 +486,163 @@ if destination and num_days > 0:
     else:
         AgentClass = HFChatAgent
     
+    # Display trip summary
+    if len(destinations) > 1:
+        st.success(f"✅ Multi-destination trip planned: {len(destinations)} destinations in {num_days} days")
+    else:
+        st.success(f"✅ Single destination trip planned: {destinations[0]} for {num_days} days")
+    
     # Initialize agents with proper error handling
     try:
+        # Enhanced researcher for multi-destination support
         researcher = AgentClass(
-            name="Researcher",
-            role="Travel Research Specialist",
+            name="Multi-Destination Researcher",
+            role="Travel Research Specialist for Single and Multi-City Trips",
             description=dedent(f"""
             You are an expert travel researcher specializing in {travel_style.lower()} travel.
-            Research comprehensive information about {destination} for a {num_days}-day trip.
-            Focus on finding the best {', '.join(accommodation_type)} accommodations, 
-            activities related to {', '.join(interests)}, and travel options for {mobility.lower()}.
-            Consider the budget range of {budget_range} and group size of {travelers} travelers.
-            Provide detailed, accurate, and up-to-date information about attractions, dining, 
-            transportation, and local experiences.
+            You excel at planning both single-destination and multi-destination trips.
+            
+            Current assignment: Research {'multi-destination trip covering: ' + ', '.join(destinations) if len(destinations) > 1 else 'single destination: ' + destinations[0]}
+            Trip duration: {num_days} days for {travelers} travelers
+            Budget: {budget_range} | Interests: {', '.join(interests)}
+            
+            For multi-destination trips, you provide comparative analysis, optimal routing, 
+            and comprehensive logistics planning. For single destinations, you provide 
+            in-depth local expertise and detailed recommendations.
             """),
             instructions=[
-                f"Research {destination} thoroughly for {travel_style.lower()} travelers",
+                f"Research {'all destinations: ' + ', '.join(destinations) if len(destinations) > 1 else destinations[0]} for {travel_style.lower()} travelers",
                 f"Focus on {', '.join(interests)} activities and {', '.join(accommodation_type)} accommodations",
                 f"Consider {budget_range} budget and {mobility} transportation preferences",
-                "Provide specific recommendations with practical details like pricing, location, and booking information",
-                "Response should be under 2k tokens and well-structured",
+                "For multi-destination trips: provide inter-city logistics, optimal routing, and time allocation",
+                "For single destinations: provide comprehensive local insights and day trip options",
+                "Include practical details like pricing, booking info, and travel times",
+                "Structure response clearly by destination with comparative insights",
+                "Response should be comprehensive but well-organized (under 3k tokens)"
             ]
         )
 
+        # Enhanced planner for multi-destination support
         planner = AgentClass(
-            name="Planner",
-            role="Travel Itinerary Specialist",
+            name="Multi-Destination Planner",
+            role="Travel Itinerary Specialist for Complex Multi-City Trips",
             description=dedent(f"""
-            You are a professional travel planner creating a detailed {num_days}-day itinerary for {destination}.
-            The trip is for {travelers} travelers with a {travel_style.lower()} travel style and {budget_range} budget.
-            Key interests: {', '.join(interests)}
-            Accommodation preferences: {', '.join(accommodation_type)}
-            Transportation: {mobility}
+            You are a professional travel planner specializing in creating detailed itineraries 
+            for both single and multi-destination trips.
+            
+            Current assignment: Create {num_days}-day itinerary for {'multi-city trip: ' + ', '.join(destinations) if len(destinations) > 1 else destinations[0]}
+            Travelers: {travelers} with {travel_style.lower()} style | Budget: {budget_range}
+            Interests: {', '.join(interests)} | Transport: {mobility}
             Special requirements: {special_requirements or 'None'}
             
-            Create a comprehensive day-by-day itinerary that includes:
-            - Daily activities and attractions
-            - Meal recommendations
-            - Transportation suggestions
-            - Estimated costs and timing
-            - Backup options for weather-dependent activities
+            For multi-destination trips, you excel at optimal routing, time allocation, 
+            and seamless transitions between cities while maximizing experiences.
             """),
             instructions=[
-                f"Create a detailed {num_days}-day itinerary for {destination}",
-                "Structure each day with morning, afternoon, and evening activities",
+                f"Create detailed {num_days}-day itinerary covering {'all destinations: ' + ', '.join(destinations) if len(destinations) > 1 else destinations[0]}",
+                "For multi-destination: plan optimal route, allocate time efficiently, include travel days",
+                "For single destination: create comprehensive daily schedules with variety and depth",
+                "Structure each day with morning, afternoon, evening activities",
                 "Include specific recommendations for dining, transportation, and accommodations",
                 "Provide estimated costs and time allocations for each activity",
-                "Consider the group size, travel style, and special requirements",
-                "Add practical tips and local insights",
-                "Response should be under 2k tokens and well-structured"
+                "Consider group size, travel style, and special requirements",
+                "Add practical tips, booking priorities, and local insights",
+                "For multi-city: include detailed transition logistics and luggage handling",
+                "Response should be detailed but well-structured (under 3k tokens)"
             ]
         )
 
-        # Button layout
+        # Button layout with updated labels
         col_btn1, col_btn2, col_btn3 = st.columns(3)
         
+        destination_type = "Multi-Destination" if len(destinations) > 1 else "Destination"
+        
         with col_btn1:
-            research_btn = st.button("🔍 Research Destination", type="primary", use_container_width=True)
+            research_btn = st.button(f"🔍 Research {destination_type}", type="primary", use_container_width=True)
         
         with col_btn2:
-            generate_btn = st.button("📅 Generate Full Itinerary", type="primary", use_container_width=True)
+            generate_btn = st.button(f"📅 Generate {destination_type} Itinerary", type="primary", use_container_width=True)
         
         with col_btn3:
             quick_tips_btn = st.button("💡 Quick Tips", use_container_width=True)
 
-        # Research functionality
+        # Enhanced research functionality
         if research_btn:
-            with st.spinner("🔍 Researching destination..."):
+            research_type = "multi-destination" if len(destinations) > 1 else "destination"
+            with st.spinner(f"🔍 Researching {research_type}..."):
                 try:
-                    research_prompt = f"""
-                    Research {destination} for a {num_days}-day {travel_style.lower()} trip for {travelers} travelers.
-                    Budget: {budget_range}
-                    Interests: {', '.join(interests)}
-                    Accommodation preferences: {', '.join(accommodation_type)}
-                    Transportation: {mobility}
-                    Special requirements: {special_requirements or 'None'}
-                    
-                    Provide comprehensive information about:
-                    1. Top attractions and activities
-                    2. Recommended accommodations
-                    3. Local dining options
-                    4. Transportation methods
-                    5. Cultural tips and local customs
-                    6. Weather considerations
-                    7. Budget estimates
-                    """
+                    research_prompt = create_multi_destination_research_prompt(
+                        destinations, num_days, travel_style, travelers, 
+                        budget_range, interests, accommodation_type, mobility, special_requirements
+                    )
                     
                     research_response = researcher.run(research_prompt)
                     st.session_state.research_results = research_response.content
-                    st.success("✅ Research completed successfully!")
+                    st.success(f"✅ {destination_type} research completed successfully!")
                 except Exception as e:
                     st.error(f"❌ Research failed: {str(e)}")
 
-        # Generate itinerary
+        # Enhanced itinerary generation
         if generate_btn:
-            with st.spinner("📅 Creating your personalized itinerary..."):
+            itinerary_type = "multi-destination" if len(destinations) > 1 else ""
+            with st.spinner(f"📅 Creating your personalized {itinerary_type} itinerary..."):
                 try:
-                    context = f"""
-                    Create a detailed itinerary for:
-                    Destination: {destination}
-                    Duration: {num_days} days (from {start_date} to {end_date})
-                    Travelers: {travelers} people
-                    Travel Style: {travel_style}
-                    Budget: {budget_range}
-                    Interests: {', '.join(interests)}
-                    Accommodations: {', '.join(accommodation_type)}
-                    Transportation: {mobility}
-                    Special Requirements: {special_requirements or 'None'}
-                    """
-                    
-                    if st.session_state.research_results:
-                        context += f"\n\nResearch Information:\n{st.session_state.research_results}"
+                    context = create_multi_destination_itinerary_prompt(
+                        destinations, num_days, start_date, end_date, travelers, 
+                        travel_style, budget_range, interests, accommodation_type, 
+                        mobility, special_requirements, st.session_state.research_results
+                    )
                     
                     itinerary_response = planner.run(context)
                     st.session_state.itinerary = itinerary_response.content
-                    st.success("✅ Itinerary generated successfully!")
+                    st.success(f"✅ {destination_type} itinerary generated successfully!")
                 except Exception as e:
                     st.error(f"❌ Itinerary generation failed: {str(e)}")
 
-        # Quick tips
+        # Enhanced quick tips
         if quick_tips_btn:
-            tips_prompt = f"Provide essential travel tips for visiting {destination}"
+            if len(destinations) > 1:
+                tips_prompt = f"Provide essential multi-destination travel tips for visiting {', '.join(destinations)} in a single trip. Include inter-city travel logistics, packing strategies, and destination-specific advice."
+            else:
+                tips_prompt = f"Provide essential travel tips for visiting {destinations[0]}"
+                
             try:
                 tips_agent = AgentClass("Tips", "Travel Advisor", "You provide practical travel tips and advice", [])
                 tips_response = tips_agent.run(tips_prompt)
-                st.info(f"💡 **Travel Tips for {destination}:**\n\n{tips_response.content}")
+                destination_list = ', '.join(destinations)
+                st.info(f"💡 **Travel Tips for {destination_list}:**\n\n{tips_response.content}")
             except Exception as e:
                 st.error(f"Failed to generate tips: {str(e)}")
 
-        # Display results
+        # Display results with enhanced formatting
         if st.session_state.research_results:
-            st.subheader("🔍 Research Results")
+            research_title = f"🔍 Research Results - {', '.join(destinations)}"
+            st.subheader(research_title)
             with st.expander("View Research Details", expanded=False):
                 st.write(st.session_state.research_results)
 
         if st.session_state.itinerary:
-            st.subheader("📅 Your Personalized Itinerary")
+            itinerary_title = f"📅 Your Personalized {'Multi-Destination ' if len(destinations) > 1 else ''}Itinerary"
+            st.subheader(itinerary_title)
             with st.expander("View Itinerary Details", expanded=False):
                 st.write(st.session_state.itinerary)
-            st.markdown('</div>', unsafe_allow_html=True)
 
-            # Export options
+            # Enhanced export options
             col_export1, col_export2, col_export3 = st.columns(3)
             
             with col_export1:
                 if st.session_state.itinerary:
+                    # Create more descriptive filename
+                    filename_destinations = '_'.join([dest.replace(', ', '_').replace(' ', '_') for dest in destinations[:3]])  # Limit to first 3 destinations
+                    if len(destinations) > 3:
+                        filename_destinations += f"_plus{len(destinations)-3}more"
+                    
+                    filename = f"{filename_destinations}_{num_days}days_itinerary.txt"
+                    
                     st.download_button(
                         label="📄 Download Itinerary",
                         data=st.session_state.itinerary,
-                        file_name=f"{destination.replace(', ', '_').replace(' ', '_')}_{num_days}days_itinerary.txt",
+                        file_name=filename,
                         mime="text/plain",
                         use_container_width=True
                     )
@@ -476,13 +659,13 @@ if destination and num_days > 0:
         st.error(f"❌ Error initializing agents: {str(e)}")
 
 else:
-    st.warning("⚠️ Please provide destination and valid travel dates to generate an itinerary.")
+    st.warning("⚠️ Please provide destination(s) and valid travel dates to generate an itinerary.")
     if not destination:
-        st.info("📍 Enter your destination in the Trip Details section")
+        st.info("📍 Enter your destination(s) in the Trip Details section")
     if num_days <= 0:
         st.info("📅 Select valid start and end dates for your trip")
 
-# Help section
+# Enhanced help section
 st.divider()
 st.header("ℹ️ Help & Troubleshooting")
 
@@ -500,6 +683,34 @@ with st.expander("🔧 Setup Instructions"):
        - You'll get basic templates instead of AI-generated content
     """)
 
+with st.expander("🌍 Multi-Destination Planning"):
+    st.markdown("""
+    **How to plan multi-destination trips:**
+    
+    **Input Format:**
+    - Single destination: `Tokyo, Japan`
+    - Multiple destinations: `Tokyo, Kyoto, Osaka` or `Paris, London, Amsterdam`
+    - Separate destinations with commas
+    
+    **Multi-Destination Features:**
+    - **Automatic route optimization** for efficient travel
+    - **Time allocation** across destinations based on attractions
+    - **Inter-city transportation** planning and costs
+    - **Comparative analysis** of destinations
+    - **Seamless transitions** with luggage and check-in logistics
+    
+    **Best Practices:**
+    - **2-4 destinations** work best for most trip lengths
+    - **Allow travel days** in your total duration
+    - **Consider geographical proximity** for efficient routing
+    - **Research visa requirements** for multiple countries
+    
+    **Example Multi-City Trips:**
+    - **Japan Circuit**: Tokyo, Kyoto, Osaka (7-10 days)
+    - **Europe Tour**: Paris, Amsterdam, Berlin (10-14 days)
+    - **Southeast Asia**: Bangkok, Singapore, Kuala Lumpur (8-12 days)
+    """)
+
 with st.expander("❓ Common Issues"):
     st.markdown("""
     **Error: 401 Unauthorized**
@@ -513,9 +724,15 @@ with st.expander("❓ Common Issues"):
     - Try again later or use offline mode
     
     **Slow responses**
+    - Multi-destination planning requires more processing time
     - Free tier APIs have rate limits
     - Consider upgrading to paid tiers for faster responses
     - Use offline mode for immediate basic results
+    
+    **Multi-destination planning tips**
+    - Keep destination count reasonable (2-4 destinations)
+    - Ensure adequate trip duration for multiple destinations
+    - Consider visa and transportation requirements between countries
     """)
 
 # Footer
@@ -523,6 +740,6 @@ st.divider()
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem;">
     <p>Powered by HuggingFace + Llama 4 | Built with Streamlit</p>
-    <p>🌟 Plan smarter, travel better!</p>
+    <p>🌟 Plan smarter, travel better - single or multi-destination!</p>
 </div>
 """, unsafe_allow_html=True)
