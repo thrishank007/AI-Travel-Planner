@@ -175,9 +175,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state for API keys
+# Initialize session state for API keys, correctly prioritizing .env file
 if 'hf_api_key' not in st.session_state:
-    st.session_state.hf_api_key = ""
+    st.session_state.hf_api_key = os.getenv("HF_API_KEY", "")
 
 # Styling
 st.markdown("""
@@ -235,22 +235,28 @@ st.markdown("""
 with st.sidebar:
     st.header("🔧 Configuration")
     
-    # API Key inputs with better handling
-    hf_api_key = st.text_input(
+    # API Key input that does NOT display the loaded key
+    user_provided_key = st.text_input(
         "HuggingFace API Key", 
         type="password", 
-        help="Required for AI model access. Get one at huggingface.co/settings/tokens",
-        value=st.session_state.hf_api_key
+        placeholder="Enter key to override .env",
+        help="Required for AI model access. Overrides .env key for this session."
     )
-    if hf_api_key:
-        st.session_state.hf_api_key = hf_api_key
     
+    # Update session state ONLY if the user enters a new key
+    if user_provided_key:
+        st.session_state.hf_api_key = user_provided_key
+        st.success("API key updated for this session.")
+
     # API Status indicator
     if st.session_state.hf_api_key:
         st.markdown('<div class="api-status api-connected">✅ HuggingFace API: Connected</div>', unsafe_allow_html=True)
+        # Inform the user if the key is from the .env file
+        if os.getenv("HF_API_KEY") == st.session_state.hf_api_key and not user_provided_key:
+             st.caption("Using API key from .env file.")
     else:
         st.markdown('<div class="api-status api-disconnected">❌ HuggingFace API: Not Connected</div>', unsafe_allow_html=True)
-        st.info("💡 Get a free HuggingFace API key at: https://huggingface.co/settings/tokens")
+        st.info("💡 You can set the HF_API_KEY in a .env file or enter it above.")
     
     st.divider()
     st.header("🎯 Travel Preferences")
