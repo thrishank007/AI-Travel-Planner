@@ -3,10 +3,12 @@ import streamlit as st
 import os
 from huggingface_hub import InferenceClient
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
+load_dotenv()
 # Initialize Hugging Face Inference Client with better error handling
 def get_hf_client():
-    api_key = os.getenv("HF_API_KEY") or st.session_state.get("hf_api_key", "")
+    api_key = st.session_state.get("hf_api_key") or os.getenv("HF_API_KEY")
     if not api_key or api_key == "hf_demo_fallback":
         return None
     try:
